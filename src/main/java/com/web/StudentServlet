@@ -1,0 +1,215 @@
+package com.studentmanagement.web;
+
+import com.studentmanagement.dao.StudentDAO;
+import com.studentmanagement.model.Student;
+import com.studentmanagement.util.ValidationUtil;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.*;
+
+import java.io.IOException;
+import java.sql.SQLException;
+import java.util.List;
+
+@WebServlet("/students")
+public class StudentServlet extends HttpServlet {
+
+    private final StudentDAO studentDAO = new StudentDAO();
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+
+        String action = request.getParameter("action");
+
+        try {
+            if ("edit".equalsIgnoreCase(action)) {
+                showEditForm(request, response);
+            } else if ("delete".equalsIgnoreCase(action)) {
+                deleteStudent(request, response);
+            } else {
+                listStudents(request, response);
+            }
+        } catch (SQLException e) {
+            throw new ServletException("Database error while processing request.", e);
+        }
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+
+        request.setCharacterEncoding("UTF-8");
+
+        String action = request.getParameter("action");
+
+        try {
+            if ("add".equalsIgnoreCase(action)) {
+                addStudent(request, response);
+            } else if ("update".equalsIgnoreCase(action)) {
+                updateStudent(request, response);
+            } else {
+                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid action.");
+            }
+        } catch (SQLException e) {
+            handleDatabaseError(request, response, e);
+        }
+    }
+
+    private void listStudents(HttpServletRequest request, HttpServletResponse response)
+            throws SQLException, ServletException, IOException {
+
+        List<Student> students = studentDAO.getAllStudents();
+        request.setAttribute("students", students);
+
+        request.getRequestDispatcher("/WEB-INF/views/student-list.jsp")
+                .forward(request, response);
+    }
+
+    private void showEditForm(HttpServletRequest request, HttpServletResponse response)
+            throws SQLException, ServletException, IOException {
+
+        String idText = request.getParameter("id");
+
+        if (idText == null) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Student ID is required.");
+            return;
+        }
+
+        try {
+            int id = Integer.parseInt(idText);
+            Student student = studentDAO.getStudentById(id);
+
+            if (student == null) {
+                response.sendError(HttpServletResponse.SC_NOT_FOUND, "Student not found.");
+                return;
+            }
+
+            request.setAttribute("student", student);
+            request.getRequestDispatcher("/WEB-INF/views/student-form.jsp")
+                    .forward(request, response);
+
+        } catch (NumberFormatException e) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid student ID.");
+        }
+    }
+
+    private void addStudent(HttpServletRequest request, HttpServletResponse response)
+            throws SQLException, ServletException, IOException {
+
+        Student student = readStudentFromRequest(request);
+        String validationError = ValidationUtil.validate(student);
+
+        if (validationError != null) {
+            request.setAttribute("error", validationError);
+            request.setAttribute("student", student);
+            request.getRequestDispatcher("/WEB-INF/views/student-form.jsp")
+                    .forward(request, response);
+            return;
+        }
+
+        try {
+            studentDAO.addStudent(student);
+            response.sendRedirect(request.getContextPath() + "/students?message=added");
+        } catch (SQLException e) {
+            if (e.getErrorCode() == 1062) {
+                request.setAttribute("error", "Student ID or email already exists.");
+                request.setAttribute("student", student);
+                request.getRequestDispatcher("/WEB-INF/views/student-form.jsp")
+                        .forward(request, response);
+            } else {
+                throw e;
+            }
+        }
+    }
+
+    private void updateStudent(HttpServletRequest request, HttpServletResponse response)
+            throws SQLException, ServletException, IOException {
+
+        Student student = readStudentFromRequest(request);
+        String validationError = ValidationUtil.validate(student);
+
+        if (validationError != null) {
+            request.setAttribute("error", validationError);
+            request.setAttribute("student", student);
+            request.setAttribute("editMode", true);
+            request.getRequestDispatcher("/WEB-INF/views/student-form.jsp")
+                    .forward(request, response);
+            return;
+        }
+
+        try {
+            boolean updated = studentDAO.updateStudent(student);
+
+            if (updated) {
+                response.sendRedirect(request.getContextPath() + "/students?message=updated");
+            } else {
+                response.sendError(HttpServletResponse.SC_NOT_FOUND, "Student not found.");
+            }
+        } catch (SQLException e) {
+            if (e.getErrorCode() == 1062) {
+                request.setAttribute("error", "Email already belongs to another student.");
+                request.setAttribute("student", student);
+                request.setAttribute("editMode", true);
+                request.getRequestDispatcher("/WEB-INF/views/student-form.jsp")
+                        .forward(request, response);
+            } else {
+                throw e;
+            }
+        }
+    }
+
+    private void deleteStudent(HttpServletRequest request, HttpServletResponse response)
+            throws SQLException, IOException {
+
+        String idText = request.getParameter("id");
+
+        if (idText == null) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Student ID is required.");
+            return;
+        }
+
+        try {
+            int id = Integer.parseInt(idText);
+            boolean deleted = studentDAO.deleteStudent(id);
+
+            String message = deleted ? "deleted" : "notfound";
+            response.sendRedirect(request.getContextPath() + "/students?message=" + message);
+
+        } catch (NumberFormatException e) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid student ID.");
+        }
+    }
+
+    private Student readStudentFromRequest(HttpServletRequest request) {
+        int id = 0;
+
+        try {
+            id = Integer.parseInt(request.getParameter("id"));
+        } catch (Exception ignored) {
+        }
+
+        String name = trim(request.getParameter("name"));
+        String email = trim(request.getParameter("email"));
+        String department = trim(request.getParameter("department"));
+        String grade = trim(request.getParameter("grade"));
+
+        return new Student(id, name, email, department, grade);
+    }
+
+    private String trim(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private void handleDatabaseError(HttpServletRequest request,
+                                     HttpServletResponse response,
+                                     SQLException e)
+            throws ServletException, IOException {
+
+        log("Database error", e);
+        request.setAttribute("error",
+                "A database error occurred. Please check the database connection and try again.");
+        request.getRequestDispatcher("/WEB-INF/views/error.jsp")
+                .forward(request, response);
+    }
+}
