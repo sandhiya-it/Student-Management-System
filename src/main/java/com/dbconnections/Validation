@@ -1,0 +1,46 @@
+package com.studentmanagement.util;
+
+import com.studentmanagement.model.Student;
+
+import java.util.regex.Pattern;
+
+public class ValidationUtil {
+
+    private static final Pattern EMAIL_PATTERN =
+            Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
+
+    private ValidationUtil() {
+    }
+
+    public static String validate(Student student) {
+        if (student.getId() <= 0) {
+            return "Student ID must be a positive number.";
+        }
+
+        if (student.getName() == null || student.getName().isBlank()) {
+            return "Name is required.";
+        }
+
+        if (student.getName().length() > 100) {
+            return "Name must not exceed 100 characters.";
+        }
+
+        if (student.getEmail() == null || student.getEmail().isBlank()) {
+            return "Email is required.";
+        }
+
+        if (!EMAIL_PATTERN.matcher(student.getEmail()).matches()) {
+            return "Enter a valid email address.";
+        }
+
+        if (student.getDepartment() == null || student.getDepartment().isBlank()) {
+            return "Department is required.";
+        }
+
+        if (student.getGrade() == null || student.getGrade().isBlank()) {
+            return "Grade is required.";
+        }
+
+        return null;
+    }
+}
