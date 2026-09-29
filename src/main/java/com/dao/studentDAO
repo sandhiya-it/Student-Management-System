@@ -1,0 +1,103 @@
+package com.studentmanagement.dao;
+
+import com.studentmanagement.model.Student;
+import com.studentmanagement.util.DBConnection;
+
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class StudentDAO {
+
+    private static final String INSERT_SQL =
+            "INSERT INTO students (id, name, email, department, grade) VALUES (?, ?, ?, ?, ?)";
+
+    private static final String SELECT_BY_ID_SQL =
+            "SELECT id, name, email, department, grade FROM students WHERE id = ?";
+
+    private static final String SELECT_ALL_SQL =
+            "SELECT id, name, email, department, grade FROM students ORDER BY id";
+
+    private static final String UPDATE_SQL =
+            "UPDATE students SET name = ?, email = ?, department = ?, grade = ? WHERE id = ?";
+
+    private static final String DELETE_SQL =
+            "DELETE FROM students WHERE id = ?";
+
+    public boolean addStudent(Student student) throws SQLException {
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(INSERT_SQL)) {
+
+            ps.setInt(1, student.getId());
+            ps.setString(2, student.getName());
+            ps.setString(3, student.getEmail());
+            ps.setString(4, student.getDepartment());
+            ps.setString(5, student.getGrade());
+
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    public Student getStudentById(int id) throws SQLException {
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(SELECT_BY_ID_SQL)) {
+
+            ps.setInt(1, id);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return mapStudent(rs);
+                }
+            }
+        }
+        return null;
+    }
+
+    public List<Student> getAllStudents() throws SQLException {
+        List<Student> students = new ArrayList<>();
+
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(SELECT_ALL_SQL);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                students.add(mapStudent(rs));
+            }
+        }
+
+        return students;
+    }
+
+    public boolean updateStudent(Student student) throws SQLException {
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(UPDATE_SQL)) {
+
+            ps.setString(1, student.getName());
+            ps.setString(2, student.getEmail());
+            ps.setString(3, student.getDepartment());
+            ps.setString(4, student.getGrade());
+            ps.setInt(5, student.getId());
+
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    public boolean deleteStudent(int id) throws SQLException {
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(DELETE_SQL)) {
+
+            ps.setInt(1, id);
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    private Student mapStudent(ResultSet rs) throws SQLException {
+        return new Student(
+                rs.getInt("id"),
+                rs.getString("name"),
+                rs.getString("email"),
+                rs.getString("department"),
+                rs.getString("grade")
+        );
+    }
+}
